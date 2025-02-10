@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Callback - App3</title>
+</head>
+<body>
+    <h1>Processing Login...</h1>
+    <p>Please wait while we authenticate you.</p>
+
+    <script>
+        // ดึงค่าจาก URL เช่น code ที่ได้จาก OIDC
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+
+        if (code) {
+            // ส่ง code ไปแลกเปลี่ยนเป็น access token และ id token
+            fetch('http://localhost:4000/callback', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            })
+            .then((response) => response.json())
+            .then((data) => {
+                if (data.access_token) {
+                    localStorage.setItem('access_token', data.access_token);
+                    window.location.href = '/protected'; // Redirect ไปหน้าโปรไฟล์
+                }
+            })
+            .catch((err) => console.error('Error:', err));
+        } else {
+            alert('Authorization code not found');
+        }
+    </script>
+</body>
+</html>

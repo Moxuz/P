@@ -1,0 +1,25 @@
+{
+    "name": "your-project-name",
+    "version": "1.0.0",
+    "description": "Your project description",
+    "main": "server.js",
+    "scripts": {
+        "start": "node server.js"
+    },
+    "dependencies": {
+        "bcrypt": "^5.0.1",
+        "bcryptjs": "^2.4.3",
+        "body-parser": "^1.19.0",
+        "express": "^4.17.1",
+        "express-session": "^1.18.1",
+        "jsonwebtoken": "^8.5.1",
+        "kafka-node": "^5.0.0",
+        "mongoose": "^5.10.9",
+        "oidc-provider": "^7.0.0",
+        "passport": "^0.4.1",
+        "passport-google-oauth20": "^2.0.0",
+        "snappy": "^7.2.2"
+    },
+    "author": "Your Name",
+    "license": "ISC"
+}

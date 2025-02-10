@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Protected Page - App3</title>
+</head>
+<body>
+    <h1>Protected Information</h1>
+    <p>Welcome to the protected page! Here is your user info:</p>
+
+    <div id="userInfo"></div>
+
+    <script>
+        // ดึง access_token จาก localStorage
+        const token = localStorage.getItem('access_token');
+
+        if (!token) {
+            alert('You must log in first.');
+            window.location.href = '/login';
+        } else {
+            // ดึงข้อมูลผู้ใช้จาก /auth/userinfo endpoint
+            fetch('http://localhost:4000/protected', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+            .then((response) => response.json())
+            .then((data) => {
+                // แสดงข้อมูลผู้ใช้
+                document.getElementById('userInfo').innerHTML = `
+                    <p>Email: ${data.userInfo.email}</p>
+                    <p>Name: ${data.userInfo.name}</p>
+                `;
+            })
+            .catch((err) => {
+                console.error('Error fetching user info:', err);
+                alert('Error fetching user info');
+            });
+        }
+    </script>
+</body>
+</html>

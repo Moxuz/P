@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            background: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            width: 350px;
+            padding: 20px;
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+        }
+        .info {
+            margin-top: 20px;
+        }
+        a {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 10px 20px;
+            color: #fff;
+            background-color: #007bff;
+            border-radius: 5px;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to Your Dashboard</h1>
+        <p>You are now logged in!</p>
+
+        <!-- Link to go to Port 3000 -->
+        <a id="port3000-link" href="#">Go to Port 3000</a>
+
+        <div id="user-info" class="info">
+            <!-- User information will be displayed here -->
+        </div>
+    </div>
+
+    <script>
+        // Extract token from URL query parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');  // Check if 'token' is present in the URL
+
+        if (!token) {
+            alert('No token provided. Redirecting to login...');
+            window.location.href = '/login';  // Redirect to login page if no token
+        } else {
+            // Store the token in localStorage or cookie
+            localStorage.setItem('authToken', token);
+
+            // Decode the JWT token (optional)
+            try {
+                const decodedToken = JSON.parse(atob(token.split('.')[1]));  // Decode the payload part of the JWT
+                document.getElementById('user-info').innerHTML = `
+                    <p><strong>Email:</strong> ${decodedToken.email}</p>
+                    <p><strong>Role:</strong> ${decodedToken.role}</p>
+                `;
+            } catch (e) {
+                console.error('Error decoding token:', e);
+            }
+
+            // Update the Port 3000 link dynamically
+            const linkElement = document.getElementById('port3000-link');
+            linkElement.href = `http://localhost:3000?token=${token}`;
+        }
+    </script>
+</body>
+</html>

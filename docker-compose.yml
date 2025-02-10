@@ -1,0 +1,125 @@
+version: "3.8"
+
+services:
+  kong-database:
+    image: postgres:13
+    container_name: kong_database
+    restart: always
+    environment:
+      POSTGRES_USER: kong
+      POSTGRES_DB: kong
+      POSTGRES_PASSWORD: kongpassword
+    networks:
+      - kong-network
+
+  kong-migrations:
+    image: kong:latest
+    depends_on:
+      - kong-database
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-database
+      KONG_PG_PASSWORD: kongpassword
+    command: kong migrations bootstrap
+    networks:
+      - kong-network
+
+  kong:
+    image: kong:latest
+    container_name: kong
+    restart: always
+    depends_on:
+      - kong-database
+      - kong-migrations
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-database
+      KONG_PG_PASSWORD: kongpassword
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+    ports:
+      - "8000:8000"  # Public API Gateway
+      - "8443:8443"  # HTTPS Public API Gateway
+      - "8001:8001"  # Admin API (Used to configure Kong)
+      - "8444:8444"  # HTTPS Admin API
+    networks:
+      - kong-network
+
+  server:
+    build: .
+    container_name: node_server
+    environment:
+      MONGODB_URI: mongodb://admin:adminpassword@mongo:27017/authdb?authSource=admin
+    depends_on:
+      - mongo
+    ports:
+      - "5000:5000"
+    networks:
+      - kong-network
+
+  zookeeper:
+    image: wurstmeister/zookeeper
+    container_name: zookeeper
+    restart: always
+    ports:
+      - "2181:2181"
+    networks:
+      - kong-network
+
+  kafka:
+    image: wurstmeister/kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+    ports:
+      - "9092:9092"
+    networks:
+      - kong-network
+      
+  mongo:
+    image: mongo:latest
+    container_name: mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: adminpassword
+    ports:
+      - "27017:27017"
+    
+    networks:
+      - kong-network
+      
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh admin -u admin -p adminpassword --authenticationDatabase admin || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongo-express:
+    image: mongo-express:latest
+    container_name: mongo-express
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: adminpassword
+      ME_CONFIG_MONGODB_SERVER: mongo
+      ME_CONFIG_BASICAUTH_USERNAME: meuser
+      ME_CONFIG_BASICAUTH_PASSWORD: mepassword
+    ports:
+      - "8081:8081"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - kong-network
+
+networks:
+  kong-network:
+    driver: bridge  
