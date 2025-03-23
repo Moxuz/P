@@ -1,0 +1,30 @@
+{
+    "title": "Authentication Dashboard",
+    "panels": [
+      {
+        "title": "Login Attempts",
+        "type": "graph",
+        "datasource": "Prometheus",
+        "targets": [{
+          "expr": "rate(login_attempts_total[5m])",
+          "legendFormat": "{{status}}"
+        }]
+      },
+      {
+        "title": "Login Logs",
+        "type": "logs",
+        "datasource": "Loki",
+        "targets": [{
+          "expr": "{app=\"auth-service\"}"
+        }]
+      },
+      {
+        "title": "Auth Events",
+        "type": "stream",
+        "datasource": "Kafka",
+        "targets": [{
+          "topic": "auth-events"
+        }]
+      }
+    ]
+  }

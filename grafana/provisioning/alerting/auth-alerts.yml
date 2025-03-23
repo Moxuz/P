@@ -1,0 +1,29 @@
+apiVersion: 1
+
+groups:
+  - name: AuthAlerts
+    folder: Authentication
+    interval: 1m
+    rules:
+      - title: High Login Failures
+        uid: high_login_failures
+        condition: and
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: Prometheus
+            model:
+              expr: rate(login_attempts_total{status="failure"}[5m]) > 10
+              intervalMs: 1000
+              maxDataPoints: 43200
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: High login failure rate detected
+          description: Login failure rate is above 10 per minute for the last 5 minutes
+        isPaused: false
+        noDataState: NoData
+        execErrState: Error 

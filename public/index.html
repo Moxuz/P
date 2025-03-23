@@ -87,7 +87,7 @@
         <p>Please log in or register to continue.</p>
         
         <!-- Login Form -->
-        <form action="/login" method="POST">
+        <form action="/auth/login" method="POST">
             <div class="form-group">
                 <label for="email">Email:</label>
                 <input type="email" id="email" name="email" required>
@@ -96,13 +96,17 @@
                 <label for="password">Password:</label>
                 <input type="password" id="password" name="password" required>
             </div>
+            <input type="hidden" name="client_id" value="client2">
+            <input type="hidden" name="redirect_uri" value="http://localhost:4000/callback">
+            <input type="hidden" name="response_type" value="code">
+            <input type="hidden" name="state" value="random_state">
             <button type="submit" class="btn">Login</button>
         </form>
 
         <p class="divider">OR</p>
         
         <!-- Google Login Link -->
-        <a href="/auth/google/callback" class="google-login">Login with Google</a>
+        <a href="/auth/google/callback?client_id=client2&redirect_uri=http://localhost:4000/callback&response_type=code&state=random_state" class="google-login">Login with Google</a>
 
         <!-- Register Link -->
         <a href="/register" class="link">Don't have an account? Register here</a>

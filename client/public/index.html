@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>App 2 - Client</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+        }
+        .container {
+            text-align: center;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .login-btn {
+            background-color: #1a73e8;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .login-btn:hover {
+            background-color: #1557b0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to App 2</h1>
+        <button class="login-btn" onclick="redirectToLogin()">Login</button>
+    </div>
+
+    <script>
+        function redirectToLogin() {
+            const params = new URLSearchParams({
+                client_id: 'client2',
+                redirect_uri: 'http://localhost:4000/callback',
+                response_type: 'code',
+                state: 'random_state'
+            });
+            
+            // Using Kong gateway URL
+            window.location.href = `http://localhost:8000/auth/login?${params.toString()}`;
+        }
+    </script>
+</body>
+</html>

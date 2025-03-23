@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard - App 2</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f0f2f5;
+        }
+        .dashboard {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .logout-btn {
+            background-color: #dc3545;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <h1>App 2 Dashboard</h1>
+        <p>Welcome! You are logged in.</p>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
+
+    <script>
+        function logout() {
+            fetch('/logout', { method: 'POST' })
+                .then(() => window.location.href = '/');
+        }
+
+        // Example of using the access token
+        fetch('http://localhost:5000/api/protected', {
+            headers: {
+                'Authorization': `Bearer ${access_token}`
+            }
+        });
+    </script>
+</body>
+</html> 

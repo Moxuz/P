@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  app2:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: app2
+    environment:
+      CLIENT_ID: client2
+      CLIENT_SECRET: client2secret
+      REDIRECT_URI: http://app2:4000/callback
+      AUTH_SERVER: http://node_server:5000
+      PORT: 4000
+    ports:
+      - "4000:4000"
+    networks:
+      - p2_kong-network
+
+networks:
+  p2_kong-network:
+    external: true 

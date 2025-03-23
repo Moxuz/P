@@ -9,6 +9,11 @@ const session = require('express-session');
 const path = require('path');
 const User = require('./models/User'); // ตรวจสอบ path ให้ถูกต้อง
 const config = require('./config'); // ควรมีค่า JWT_SECRET, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+const { metrics, register } = require('./config/metrics');
+const logger = require('./config/logger');
+const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
+const nodemailer = require('nodemailer');
 
 
 //const kafka = require("kafka-node"); 
@@ -234,12 +239,17 @@ app.get('/auth/google/callback', passport.authenticate('google', { failureRedire
    ส่วนของ Identity Provider (IdP) สำหรับ OAuth 2.0 / OIDC
    ======================= */
 
-// จำลอง client ที่ลงทะเบียนกับ IdP ของเรา
+// Update the clients array to include both apps
 const clients = [
   {
     client_id: 'client1',
     client_secret: 'client1secret',
-    redirect_uris: ['http://localhost:3000/callback']  // URI ที่อนุญาตให้ redirect กลับมา
+    redirect_uris: ['http://localhost:3000/callback']
+  },
+  {
+    client_id: 'client2',
+    client_secret: 'client2secret',
+    redirect_uris: ['http://localhost:4000/callback']
   }
 ];
 
@@ -266,33 +276,95 @@ function generateToken(payload) {
 app.get('/auth/authorize', (req, res) => {
   const { client_id, redirect_uri, response_type, scope, state } = req.query;
 
-  // ตรวจสอบ client_id และ redirect_uri
-  const client = clients.find(c => c.client_id === client_id && c.redirect_uris.includes(redirect_uri));
+  // Validate client
+  const client = clients.find(c => 
+    c.client_id === client_id && 
+    c.redirect_uris.includes(redirect_uri)
+  );
+
   if (!client) {
     return res.status(400).send("Invalid client or redirect URI");
   }
 
-  if (response_type !== 'code') {
-    return res.status(400).send("Unsupported response type");
-  }
-
-  // แสดงหน้า login แบบง่าย ๆ
   res.send(`
+    <!DOCTYPE html>
     <html>
-  <body>
-    <h2>Login to continue</h2>
-    <form method="post" action="/auth/authorize">
-      <input type="hidden" name="client_id" value="${client_id}" />
-      <input type="hidden" name="redirect_uri" value="${redirect_uri}" />
-      <input type="hidden" name="response_type" value="${response_type}" />
-      <input type="hidden" name="scope" value="${scope}" />
-      <input type="hidden" name="state" value="${state || ''}" />
-      <label>Email: <input name="email" type="email" /></label><br/><br/>
-      <label>Password: <input name="password" type="password" /></label><br/><br/>
-      <button type="submit">Login</button>
-    </form>
-  </body>
-</html>
+    <head>
+        <title>Login</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                margin: 0;
+                background-color: #f0f2f5;
+            }
+            .login-form {
+                background-color: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+            input {
+                display: block;
+                margin: 10px 0;
+                padding: 8px;
+                width: 200px;
+            }
+            button {
+                background-color: #1a73e8;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                width: 100%;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="login-form">
+            <h2>Login to ${client_id}</h2>
+            <form id="loginForm">
+                <input type="email" id="email" placeholder="Email" required>
+                <input type="password" id="password" placeholder="Password" required>
+                <input type="hidden" id="client_id" value="${client_id}">
+                <button type="submit">Login</button>
+            </form>
+        </div>
+
+        <script>
+            document.getElementById('loginForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                try {
+                    const response = await fetch('/auth/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            email: document.getElementById('email').value,
+                            password: document.getElementById('password').value,
+                            client_id: document.getElementById('client_id').value
+                        })
+                    });
+
+                    const data = await response.json();
+                    if (data.success) {
+                        window.location.href = '${redirect_uri}?code=' + data.token;
+                    } else {
+                        alert('Login failed');
+                    }
+                } catch (error) {
+                    alert('Login failed');
+                }
+            });
+        </script>
+    </body>
+    </html>
   `);
 });
 
@@ -440,3 +512,282 @@ app.get('/callback', async (req, res) => {
    ======================= */
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port http://localhost:${PORT}`));
+
+// Add metrics endpoint
+app.get('/metrics', async (req, res) => {
+    res.set('Content-Type', register.contentType);
+    res.end(await register.metrics());
+});
+
+// Add request duration middleware
+app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+        const duration = (Date.now() - start) / 1000;
+        metrics.requestDuration
+            .labels(req.method, req.path, res.statusCode)
+            .observe(duration);
+    });
+    next();
+});
+
+// Middleware to log all requests
+app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+        const duration = (Date.now() - start) / 1000;
+        logger.info('HTTP Request', {
+            method: req.method,
+            path: req.path,
+            statusCode: res.statusCode,
+            duration,
+            metric: 'requestDuration',
+            value: duration
+        });
+    });
+    next();
+});
+
+// Example usage in login endpoint
+app.post('/auth/login', async (req, res) => {
+    try {
+        // ... login logic ...
+
+        await logger.info('Login successful', {
+            user: req.body.email,
+            ip: req.ip,
+            metric: 'loginAttempts',
+            status: 'success'
+        });
+
+        res.json({ success: true });
+
+    } catch (error) {
+        await logger.error('Login failed', {
+            error: error.message,
+            user: req.body.email,
+            metric: 'loginAttempts',
+            status: 'failure'
+        });
+
+        res.status(500).json({ error: 'Login failed' });
+    }
+});
+
+// Add to your existing auth service
+app.get('/auth/login', (req, res) => {
+    const redirect_uri = req.query.redirect_uri;
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Login</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    margin: 0;
+                    background-color: #f0f2f5;
+                }
+                .login-form {
+                    background-color: white;
+                    padding: 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                }
+                input {
+                    display: block;
+                    margin: 10px 0;
+                    padding: 8px;
+                    width: 200px;
+                }
+                button {
+                    background-color: #1a73e8;
+                    color: white;
+                    padding: 10px 20px;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    width: 100%;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="login-form">
+                <h2>Login</h2>
+                <form id="loginForm">
+                    <input type="email" id="email" placeholder="Email" required>
+                    <input type="password" id="password" placeholder="Password" required>
+                    <button type="submit">Login</button>
+                </form>
+            </div>
+
+            <script>
+                document.getElementById('loginForm').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    
+                    try {
+                        const response = await fetch('/auth/login', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                email: document.getElementById('email').value,
+                                password: document.getElementById('password').value
+                            })
+                        });
+
+                        const data = await response.json();
+                        if (data.success) {
+                            // Redirect back to client with auth code
+                            window.location.href = '${redirect_uri}?code=' + data.token;
+                        } else {
+                            alert('Login failed');
+                        }
+                    } catch (error) {
+                        alert('Login failed');
+                    }
+                });
+            </script>
+        </body>
+        </html>
+    `);
+});
+
+app.post('/auth/login', async (req, res) => {
+  const { email, password, client_id } = req.body;
+  console.log('Login attempt with email:', email);
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user) {
+      console.log('User not found');
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      console.log('Password mismatch');
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // Create token with client info
+    const token = jwt.sign(
+      { 
+        id: user._id, 
+        email: user.email, 
+        role: user.role,
+        client_id: client_id 
+      }, 
+      JWT_SECRET, 
+      { expiresIn: '1h' }
+    );
+
+    console.log('Login successful');
+    console.log('Generated Token:', token);
+
+    // Return success with token
+    res.json({
+      success: true,
+      token: token
+    });
+  } catch (err) {
+    console.error('Server error:', err.message);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// Email configuration
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER || 'your-email@gmail.com',
+        pass: process.env.EMAIL_PASSWORD || 'your-app-specific-password'
+    }
+});
+
+// Client registration endpoint
+app.post('/auth/register-client', async (req, res) => {
+    console.log('Received client registration request:', req.body);
+    
+    const { 
+        client_name,
+        redirect_uris,
+        application_type = 'web',
+        contact_email
+    } = req.body;
+
+    try {
+        // Validate required fields
+        if (!client_name || !redirect_uris || !contact_email) {
+            console.log('Missing required fields');
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        // Validate redirect URIs
+        if (!Array.isArray(redirect_uris) || redirect_uris.length === 0) {
+            console.log('Invalid redirect URIs');
+            return res.status(400).json({ error: 'Invalid redirect URIs' });
+        }
+
+        // Generate client credentials
+        const client_id = crypto.randomBytes(16).toString('hex');
+        const client_secret = crypto.randomBytes(32).toString('hex');
+
+        // Create new client object
+        const client = {
+            client_id,
+            client_secret,
+            client_name,
+            redirect_uris,
+            application_type,
+            contact_email,
+            creation_date: new Date(),
+            status: 'active'
+        };
+
+        console.log('Generated client credentials:', { client_id, client_name });
+
+        // Add to authorized clients array
+        clients.push(client);
+
+        // Return credentials directly
+        res.json({
+            success: true,
+            client_id,
+            client_secret,
+            message: 'Registration successful. Please save your credentials securely.',
+            registration_date: client.creation_date
+        });
+    } catch (error) {
+        console.error('Client registration error:', error);
+        res.status(500).json({ 
+            error: 'Registration failed', 
+            details: error.message 
+        });
+    }
+});
+
+// Validate redirect URIs
+function validateRedirectUris(uris) {
+    return uris.every(uri => {
+        try {
+            const url = new URL(uri);
+            return url.protocol === 'https:' || url.hostname === 'localhost';
+        } catch {
+            return false;
+        }
+    });
+}
+
+// Rate limiting for registration
+const registrationLimiter = rateLimit({
+    windowMs: 24 * 60 * 60 * 1000, // 24 hours
+    max: 10 // limit each IP to 10 registrations per day
+});
+
+app.use('/auth/register-client', registrationLimiter);

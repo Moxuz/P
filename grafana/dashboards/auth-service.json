@@ -1,0 +1,43 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Login Attempts",
+      "type": "graph",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(login_attempts_total[5m])",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    },
+    {
+      "title": "Active Users",
+      "type": "gauge",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "active_users"
+        }
+      ]
+    },
+    {
+      "title": "Auth Logs",
+      "type": "logs",
+      "datasource": "Loki",
+      "targets": [
+        {
+          "expr": "{job=\"auth-service\"}"
+        }
+      ]
+    }
+  ]
+} 

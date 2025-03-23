@@ -1,0 +1,15 @@
+_format_version: "2.1"
+services:
+  - name: auth-service
+    url: http://node_server:5000
+    routes:
+      - name: auth-route
+        paths:
+          - /auth
+          - /auth/login
+          - /auth/register
+          - /auth/callback
+          - /auth/google
+          - /auth/google/callback
+        strip_path: false
+        preserve_host: true

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Auth SDK Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+        }
+        pre {
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .debug-info {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Auth SDK Test</h1>
+        <div id="auth-status">Not authenticated</div>
+        <button id="loginBtn">Login</button>
+        <button id="logoutBtn" style="display: none;">Logout</button>
+        <div id="result" class="result"></div>
+        <div id="debug" class="debug-info">
+            <h3>Debug Information:</h3>
+            <pre id="debug-content"></pre>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@mythmosu/auth-sdk"></script>
+    <script>
+        // Wait for AuthSDK to load
+        window.addEventListener('load', function() {
+            // Debug logging function
+            function debugLog(message) {
+                console.log(message);
+                const debugContent = document.getElementById('debug-content');
+                debugContent.textContent += message + '\n';
+                debugContent.scrollTop = debugContent.scrollHeight;
+            }
+
+            // Check if AuthSDK is loaded
+            if (typeof AuthSDK === 'undefined') {
+                debugLog('Error: AuthSDK is not loaded!');
+                return;
+            }
+            debugLog('AuthSDK loaded successfully');
+
+            const auth = new AuthSDK({
+                clientId: 'd3cd932b8720b3e0a709ddcc309f6eac',
+                clientSecret: 'd780b72c638f5a8b9e81deddded616ca0bb1be6f6f3c00fb27b6f024b7dd897b',
+                redirectUri: 'http://localhost:3000/callback',
+                authServerUrl: 'http://localhost:8000'
+            });
+
+            debugLog('AuthSDK initialized with configuration:');
+            debugLog(JSON.stringify({
+                clientId: auth.clientId,
+                redirectUri: auth.redirectUri,
+                authServerUrl: auth.authServerUrl
+            }, null, 2));
+
+            const loginBtn = document.getElementById('loginBtn');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const authStatus = document.getElementById('auth-status');
+            const resultDiv = document.getElementById('result');
+
+            // Check if user is already authenticated
+            if (auth.isAuthenticated()) {
+                debugLog('User is already authenticated');
+                updateUIForAuthenticatedUser();
+            } else {
+                debugLog('User is not authenticated');
+            }
+
+            loginBtn.addEventListener('click', async () => {
+                debugLog('Login button clicked');
+                try {
+                    debugLog('Attempting to login...');
+                    await auth.login();
+                    debugLog('Login successful');
+                } catch (error) {
+                    debugLog('Login error: ' + error.message);
+                    console.error('Login error:', error);
+                    resultDiv.innerHTML = `<pre>Login error: ${error.message}</pre>`;
+                }
+            });
+
+            logoutBtn.addEventListener('click', async () => {
+                debugLog('Logout button clicked');
+                try {
+                    await auth.logout();
+                    updateUIForUnauthenticatedUser();
+                    resultDiv.innerHTML = '<pre>Logged out successfully</pre>';
+                    debugLog('Logout successful');
+                } catch (error) {
+                    debugLog('Logout error: ' + error.message);
+                    console.error('Logout error:', error);
+                    resultDiv.innerHTML = `<pre>Logout error: ${error.message}</pre>`;
+                }
+            });
+
+            function updateUIForAuthenticatedUser() {
+                loginBtn.style.display = 'none';
+                logoutBtn.style.display = 'inline-block';
+                authStatus.textContent = 'Authenticated';
+                authStatus.style.color = '#4CAF50';
+                debugLog('UI updated for authenticated user');
+            }
+
+            function updateUIForUnauthenticatedUser() {
+                loginBtn.style.display = 'inline-block';
+                logoutBtn.style.display = 'none';
+                authStatus.textContent = 'Not authenticated';
+                authStatus.style.color = '#666';
+                debugLog('UI updated for unauthenticated user');
+            }
+
+            // Handle the callback
+            if (window.location.pathname === '/callback') {
+                debugLog('Callback URL detected');
+                auth.handleCallback()
+                    .then(() => {
+                        debugLog('Callback handled successfully');
+                        updateUIForAuthenticatedUser();
+                        window.location.href = '/';
+                    })
+                    .catch(error => {
+                        debugLog('Callback error: ' + error.message);
+                        console.error('Callback error:', error);
+                        resultDiv.innerHTML = `<pre>Callback error: ${error.message}</pre>`;
+                    });
+            }
+        });
+    </script>
+</body>
+</html> 

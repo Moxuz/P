@@ -8,12 +8,12 @@ RUN apt-get update && apt-get install -y \
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy package.json and package-lock.json
+# Copy package files
 COPY package*.json ./
 
 # Install dependencies
-RUN npm install --production
-RUN npm install --build-from-source snappy
+RUN npm install
+
 # Copy the rest of your application code
 COPY . .
 
