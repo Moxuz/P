@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .dashboard-container {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        .user-info {
+            margin-bottom: 20px;
+        }
+        .actions {
+            display: flex;
+            justify-content: space-between;
+        }
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .btn-logout {
+            background-color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <h1>Dashboard</h1>
+        
+        <div class="user-info">
+            <h2>Welcome, User!</h2>
+            <p>This is your personal dashboard.</p>
+        </div>
+
+        <div class="actions">
+            <a href="#" class="btn" id="profileBtn">View Profile</a>
+            <button class="btn btn-logout" id="logoutBtn">Logout</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Logout functionality
+            const logoutBtn = document.getElementById('logoutBtn');
+            logoutBtn.addEventListener('click', () => {
+                // Remove token
+                localStorage.removeItem('token');
+                localStorage.removeItem('id_token');
+                
+                // Redirect to login page
+                window.location.href = '/login';
+            });
+
+            // Profile view (placeholder)
+            const profileBtn = document.getElementById('profileBtn');
+            profileBtn.addEventListener('click', () => {
+                alert('Profile view functionality to be implemented');
+            });
+
+            // Optional: Fetch and display user info
+            const fetchUserInfo = async () => {
+                try {
+                    const token = localStorage.getItem('token');
+                    if (!token) {
+                        window.location.href = '/login';
+                        return;
+                    }
+
+                    const response = await fetch('/auth/userinfo', {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch user info');
+                    }
+
+                    const userInfo = await response.json();
+                    document.querySelector('.user-info h2').textContent = 
+                        `Welcome, ${userInfo.username || userInfo.email}!`;
+                } catch (error) {
+                    console.error('User info fetch error:', error);
+                    window.location.href = '/login';
+                }
+            };
+
+            fetchUserInfo();
+        });
+    </script>
+</body>
+</html>

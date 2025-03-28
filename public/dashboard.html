@@ -46,7 +46,7 @@
         <p>You are now logged in!</p>
 
         <!-- Link to go to Port 3000 -->
-        <a id="port3000-link" href="#">Go to Port 3000</a>
+
 
         <div id="user-info" class="info">
             <!-- User information will be displayed here -->
@@ -80,6 +80,51 @@
             const linkElement = document.getElementById('port3000-link');
             linkElement.href = `http://localhost:3000?token=${token}`;
         }
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Check if user is authenticated
+            const checkAuth = async () => {
+                try {
+                    const response = await fetch('/auth/userinfo', {
+                        credentials: 'include'
+                    });
+                    if (!response.ok) {
+                        window.location.href = '/login';
+                        return;
+                    }
+                    const userData = await response.json();
+                    updateUserInfo(userData);
+                } catch (error) {
+                    console.error('Auth check failed:', error);
+                    window.location.href = '/login';
+                }
+            };
+
+            // Update user information
+            const updateUserInfo = (userData) => {
+                document.getElementById('username').textContent = userData.username || 'User';
+                document.getElementById('userEmail').textContent = userData.email;
+                document.getElementById('userRole').textContent = userData.role || 'user';
+            };
+
+            // Logout functionality
+            document.getElementById('logoutBtn').addEventListener('click', async () => {
+                try {
+                    await fetch('/auth/logout', {
+                        method: 'POST',
+                        credentials: 'include'
+                    });
+                    window.location.href = '/login';
+                } catch (error) {
+                    console.error('Logout failed:', error);
+                }
+            });
+
+            // Initialize dashboard
+            await checkAuth();
+        });
     </script>
 </body>
 </html>

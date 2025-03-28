@@ -1,67 +1,46 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Auth SDK Test</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }
-        .container {
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            margin: 5px;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-        .result {
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 4px;
-            background-color: #f8f9fa;
-        }
-        pre {
-            background-color: #e9ecef;
-            padding: 10px;
-            border-radius: 4px;
-            overflow-x: auto;
-        }
-        .debug-info {
-            margin-top: 20px;
-            padding: 15px;
-            background-color: #fff3cd;
-            border: 1px solid #ffeeba;
-            border-radius: 4px;
-        }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your App Title</title>
 </head>
 <body>
-    <div class="container">
-        <h1>Auth SDK Test</h1>
-        <div id="auth-status">Not authenticated</div>
-        <button id="loginBtn">Login</button>
-        <button id="logoutBtn" style="display: none;">Logout</button>
-        <div id="result" class="result"></div>
-        <div id="debug" class="debug-info">
-            <h3>Debug Information:</h3>
-            <pre id="debug-content"></pre>
-        </div>
-    </div>
+    <div id="root"></div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const loginForm = document.getElementById('loginForm');
+            if (loginForm) {
+                loginForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    
+                    try {
+                        const response = await fetch('/auth/login', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                email: document.getElementById('email').value,
+                                password: document.getElementById('password').value
+                            })
+                        });
 
-    <script src="/bundle.js"></script>
+                        const data = await response.json();
+                        if (data.success) {
+                            // Redirect back to client with auth code
+                            window.location.href = `${redirect_uri}?code=${data.token}`;
+                        } else {
+                            alert('Login failed');
+                        }
+                    } catch (error) {
+                        alert('Login failed');
+                    }
+                });
+            } else {
+                console.error('Login form not found');
+            }
+        });
+    </script>
 </body>
-</html> 
+</html>

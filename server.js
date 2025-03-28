@@ -14,6 +14,7 @@ const logger = require('./config/logger');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const nodemailer = require('nodemailer');
+const cors = require('cors');
 
 
 //const kafka = require("kafka-node"); 
@@ -24,9 +25,19 @@ const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, JWT_SECRET } = config; // โห
 
 const app = express();
 
+// Configure CORS
+const corsOptions = {
+    origin: 'http://localhost:3000', // Allow your client app's origin
+    methods: ['GET', 'POST', 'OPTIONS'], // Allowed methods
+    allowedHeaders: ['Content-Type', 'Authorization'], // Allowed headers
+    credentials: true, // Allow credentials (cookies, authorization headers, etc.)
+};
+
+app.use(cors(corsOptions));
+app.use(express.json());
+
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(bodyParser.urlencoded({ extended: true })); // Parse form data
-app.use(bodyParser.json());
 app.use(
   session({
     secret: 'your_session_secret', // ใช้ secret ที่ปลอดภัยจริงในการใช้งานจริง
@@ -126,28 +137,40 @@ app.post('/login', async (req, res) => {
   try {
     const user = await User.findOne({ email });
     if (!user) {
-
-        
       console.log('User not found');
-      
       return res.status(404).json({ message: 'User not found' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-        //logMessage({ level: 'warn', message: 'Invalid credentials', email });
       console.log('Password mismatch');
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // สร้าง JWT token สำหรับ local login
-    const token = jwt.sign({ id: user._id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '1h' });
-    //logMessage({ level: 'info', message: 'User logged in', user });
+    // Create session for the user
+    req.session.user = {
+      id: user._id,
+      email: user.email,
+      username: user.username,
+      role: user.role
+    };
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { 
+        id: user._id, 
+        email: user.email, 
+        role: user.role 
+      }, 
+      JWT_SECRET, 
+      { expiresIn: '1h' }
+    );
+
     console.log('Login successful');
     console.log('Generated Token:', token);
 
-    const redirectUrl = `/dashboard?token=${token}`;
-    res.redirect(redirectUrl);
+    // Redirect to dashboard with token
+    res.redirect(`/dashboard?token=${token}`);
   } catch (err) {
     console.error('Server error:', err.message);
     res.status(500).json({ message: 'Server error', error: err.message });
@@ -242,8 +265,8 @@ app.get('/auth/google/callback', passport.authenticate('google', { failureRedire
 // Update the clients array to include both apps
 const clients = [
   {
-    client_id: 'client1',
-    client_secret: 'client1secret',
+    client_id: 'ca2f95542d8ef92eebd99e643498ffa1',
+    client_secret: 'e944dc74c0e72b3f00d0e7af5d1be72a53b16ebff2c5bd5a176cd3ed6f849ba1',
     redirect_uris: ['http://localhost:3000/callback']
   },
   {
@@ -257,9 +280,12 @@ const clients = [
 const AUTH_CODE_EXPIRY = '5m';  // authorization code หมดอายุใน 5 นาที
 const TOKEN_EXPIRY = '1h';      // access token / id token หมดอายุใน 1 ชั่วโมง
 
-// ฟังก์ชันสร้าง Authorization Code (ใช้ JWT เป็น container)
+// Function to generate Authorization Code (using JWT as container)
 function generateAuthCode(payload) {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: AUTH_CODE_EXPIRY });
+  console.log('Generating auth code with payload:', payload);
+  const code = jwt.sign(payload, JWT_SECRET, { expiresIn: AUTH_CODE_EXPIRY });
+  console.log('Generated auth code:', code);
+  return code;
 }
 
 // ฟังก์ชันสร้าง Access Token / ID Token
@@ -275,6 +301,10 @@ function generateToken(payload) {
  */
 app.get('/auth/authorize', (req, res) => {
   const { client_id, redirect_uri, response_type, scope, state } = req.query;
+  console.group('Authorization Endpoint');
+  console.log('Query Parameters:', req.query);
+  console.log('Headers:', req.headers);
+  console.groupEnd();
 
   // Validate client
   const client = clients.find(c => 
@@ -327,42 +357,19 @@ app.get('/auth/authorize', (req, res) => {
     <body>
         <div class="login-form">
             <h2>Login to ${client_id}</h2>
-            <form id="loginForm">
-                <input type="email" id="email" placeholder="Email" required>
-                <input type="password" id="password" placeholder="Password" required>
-                <input type="hidden" id="client_id" value="${client_id}">
+            <form id="loginForm" method="POST" action="/auth/authorize">
+                <input type="hidden" name="client_id" value="${client_id}">
+                <input type="hidden" name="redirect_uri" value="${redirect_uri}">
+                <input type="hidden" name="response_type" value="${response_type}">
+                <input type="hidden" name="scope" value="${scope}">
+                <input type="hidden" name="state" value="${state}">
+                
+                <input type="email" name="email" placeholder="Email" required>
+                <input type="password" name="password" placeholder="Password" required>
+                
                 <button type="submit">Login</button>
             </form>
         </div>
-
-        <script>
-            document.getElementById('loginForm').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                
-                try {
-                    const response = await fetch('/auth/login', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            email: document.getElementById('email').value,
-                            password: document.getElementById('password').value,
-                            client_id: document.getElementById('client_id').value
-                        })
-                    });
-
-                    const data = await response.json();
-                    if (data.success) {
-                        window.location.href = '${redirect_uri}?code=' + data.token;
-                    } else {
-                        alert('Login failed');
-                    }
-                } catch (error) {
-                    alert('Login failed');
-                }
-            });
-        </script>
     </body>
     </html>
   `);
@@ -374,82 +381,320 @@ app.get('/auth/authorize', (req, res) => {
  * ถ้าผ่าน ให้สร้าง authorization code และ redirect กลับไปยัง redirect_uri พร้อมกับ code และ state
  */
 app.post('/auth/authorize', async (req, res) => {
-    const { client_id, redirect_uri, response_type, scope, state, email, password } = req.body;
-  
-    // ตรวจสอบ client อีกครั้ง
-    const client = clients.find(c => c.client_id === client_id && c.redirect_uris.includes(redirect_uri));
-    if (!client) {
-      return res.status(400).send("Invalid client or redirect URI");
-    }
-  
-    // ค้นหาผู้ใช้โดยใช้ email แทน username
+  const { 
+    client_id, 
+    redirect_uri, 
+    response_type, 
+    scope, 
+    state, 
+    email, 
+    password 
+  } = req.body;
+
+  console.group('Authorization Request Logging');
+  console.log('Request Body:', {
+    client_id,
+    redirect_uri,
+    response_type,
+    scope,
+    state,
+    email: email ? 'present' : 'missing'
+  });
+  console.log('Full Request Body:', req.body);
+  console.log('Request Headers:', req.headers);
+  console.groupEnd();
+
+  // Verify client
+  const client = clients.find(c => 
+    c.client_id === client_id && 
+    c.redirect_uris.includes(redirect_uri)
+  );
+
+  if (!client) {
+    console.error('Invalid Client Configuration', {
+      provided_client_id: client_id,
+      provided_redirect_uri: redirect_uri,
+      registered_clients: clients.map(c => ({ 
+        id: c.client_id, 
+        uris: c.redirect_uris 
+      }))
+    });
+    return res.status(400).json({ 
+      error: 'invalid_client', 
+      error_description: 'Client authentication failed' 
+    });
+  }
+
+  try {
+    // Find user
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(401).send("Invalid credentials");
+      console.warn('User not found', { email });
+      return res.status(401).json({ 
+        error: 'invalid_credentials', 
+        error_description: 'User not found' 
+      });
     }
-  
-    // ตรวจสอบรหัสผ่าน
+
+    // Verify password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).send("Invalid credentials");
+      console.warn('Invalid password', { email });
+      return res.status(401).json({ 
+        error: 'invalid_credentials', 
+        error_description: 'Invalid password' 
+      });
     }
-  
-    // สร้าง authorization code โดยเก็บข้อมูล user_id, client_id และ scope
-    const authCode = generateAuthCode({ user_id: user._id.toString(), client_id, scope });
-  
-    // Redirect กลับไปยัง redirect_uri พร้อมกับ query parameters code และ state (ถ้ามี)
+
+    // Generate authorization code
+    const authCode = generateAuthCode({
+      user_id: user._id.toString(),
+      client_id,
+      scope: scope || 'openid profile email'
+    });
+
+    console.log('Generated Authorization Code:', {
+      user_id: user._id.toString(),
+      client_id,
+      scope: scope || 'openid profile email'
+    });
+
+    // Construct redirect URL
     const redirectUrl = new URL(redirect_uri);
     redirectUrl.searchParams.append("code", authCode);
+    
+    // Append state if present
     if (state) {
       redirectUrl.searchParams.append("state", state);
     }
+
+    console.log('Redirecting to:', redirectUrl.toString());
+    
+    // Redirect to client with authorization code
     res.redirect(redirectUrl.toString());
-  });
+  } catch (error) {
+    console.error('Authorization Endpoint Error:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
+    
+    res.status(500).json({ 
+      error: 'server_error', 
+      error_description: 'An unexpected error occurred' 
+    });
+  }
+});
 /**
  * Token Endpoint
  * รับ POST request เพื่อแลกเปลี่ยน authorization code เป็น access token และ id token
  * ต้องรับข้อมูล: code, client_id, client_secret, redirect_uri, grant_type
  */
-app.post('/auth/token', (req, res) => {
+
+
+
+
+app.post('/auth/token', async (req, res) => {
   const { code, client_id, client_secret, redirect_uri, grant_type } = req.body;
+  console.group('Token Endpoint');
+  console.log('Request Body:', req.body);
+  console.log('Headers:', req.headers);
+  console.groupEnd();
 
-  if (grant_type !== 'authorization_code') {
-    return res.status(400).json({ error: 'unsupported_grant_type' });
+  // Comprehensive Request Logging
+  console.group('Token Exchange Request');
+  console.log('Received Parameters:', {
+    code: code ? 'present' : 'missing',
+    client_id,
+    redirect_uri,
+    grant_type
+  });
+  console.log('Full Request Body:', req.body);
+  console.log('Request Headers:', req.headers);
+
+  // Validate Required Parameters
+  const missingParams = [];
+  if (!code) missingParams.push('code');
+  if (!client_id) missingParams.push('client_id');
+  if (!client_secret) missingParams.push('client_secret');
+  if (!redirect_uri) missingParams.push('redirect_uri');
+
+  if (missingParams.length > 0) {
+    console.error('Missing required parameters:', missingParams);
+    console.groupEnd();
+    return res.status(400).json({
+      error: 'invalid_request',
+      error_description: `Missing required parameters: ${missingParams.join(', ')}`,
+      missing_params: missingParams
+    });
   }
 
-  // ตรวจสอบ client credentials
-  const client = clients.find(c =>
-    c.client_id === client_id &&
-    c.client_secret === client_secret &&
-    c.redirect_uris.includes(redirect_uri)
-  );
-  if (!client) {
-    return res.status(400).json({ error: 'invalid_client' });
-  }
+  try {
+    // Detailed Code Verification
+    console.log('Attempting to verify authorization code');
+    let decoded;
+    try {
+      decoded = jwt.verify(code, JWT_SECRET);
+      console.log('Decoded Token Payload:', decoded);
+    } catch (verifyError) {
+      console.error('JWT Verification Error:', {
+        name: verifyError.name,
+        message: verifyError.message
+      });
 
-  // ตรวจสอบ authorization code
-  jwt.verify(code, JWT_SECRET, async (err, decoded) => {
-    if (err) {
-      return res.status(400).json({ error: 'invalid_grant' });
+      // Detailed error handling for different JWT verification errors
+      switch (verifyError.name) {
+        case 'TokenExpiredError':
+          return res.status(400).json({
+            error: 'invalid_grant',
+            error_description: 'Authorization code has expired'
+          });
+        case 'JsonWebTokenError':
+          return res.status(400).json({
+            error: 'invalid_grant',
+            error_description: 'Invalid authorization code'
+          });
+        default:
+          return res.status(400).json({
+            error: 'invalid_grant',
+            error_description: 'Authorization code verification failed'
+          });
+      }
     }
-    if (decoded.client_id !== client_id) {
-      return res.status(400).json({ error: 'invalid_grant' });
+
+    // Client Validation with Detailed Logging
+    const client = clients.find(c =>
+      c.client_id === client_id &&
+      c.client_secret === client_secret &&
+      c.redirect_uris.includes(redirect_uri)
+    );
+
+    if (!client) {
+      console.error('Client Validation Failed', {
+        provided_client_id: client_id,
+        provided_redirect_uri: redirect_uri,
+        registered_clients: clients.map(c => ({
+          id: c.client_id,
+          uris: c.redirect_uris
+        }))
+      });
+      console.groupEnd();
+      return res.status(400).json({
+        error: 'invalid_client',
+        error_description: 'Client authentication failed',
+        details: {
+          client_id,
+          redirect_uri
+        }
+      });
     }
 
-    // สร้าง access token และ id token
-    const access_token = generateToken({ user_id: decoded.user_id, scope: decoded.scope });
-    // ID Token สำหรับ OpenID Connect ประกอบด้วยข้อมูลพื้นฐานผู้ใช้ (sub, email, username)
-    const user = await User.findById(decoded.user_id);
-    const id_token = generateToken({ sub: user._id.toString(), email: user.email, username: user.username });
+    // User Retrieval with Error Handling
+    let user;
+    try {
+      user = await User.findById(decoded.user_id);
+      
+      if (!user) {
+        console.error('User Not Found', {
+          user_id: decoded.user_id
+        });
+        console.groupEnd();
+        return res.status(400).json({
+          error: 'invalid_grant',
+          error_description: 'User associated with the authorization code not found'
+        });
+      }
+    } catch (userError) {
+      console.error('User Lookup Error:', userError);
+      console.groupEnd();
+      return res.status(500).json({
+        error: 'server_error',
+        error_description: 'Error retrieving user information'
+      });
+    }
 
+    // Token Generation with Enhanced Payload
+    const access_token = generateToken({
+      sub: user._id.toString(),
+      user_id: user._id.toString(),
+      email: user.email,
+      username: user.username,
+      client_id: client_id,
+      scope: decoded.scope || 'openid profile email'
+    });
+
+    const id_token = generateToken({
+      sub: user._id.toString(),
+      email: user.email,
+      username: user.username,
+      client_id: client_id,
+      aud: client_id,
+      scope: decoded.scope || 'openid profile email'
+    });
+
+    console.log('Token Generation Successful', {
+      user_email: user.email,
+      client_id: client_id
+    });
+    console.groupEnd();
+
+    // Comprehensive Token Response
     res.json({
       access_token,
       id_token,
       token_type: "Bearer",
-      expires_in: 3600
+      expires_in: 3600,
+      scope: decoded.scope || 'openid profile email',
+      success: true
     });
-  });
+
+  } catch (err) {
+    console.error('Unexpected Token Exchange Error:', {
+      name: err.name,
+      message: err.message,
+      stack: err.stack
+    });
+    console.groupEnd();
+
+    console.group('Token Endpoint');
+    console.log('Request Body:', req.body);
+    console.log('Headers:', req.headers);
+    console.groupEnd();
+
+    res.status(500).json({
+      error: 'server_error',
+      error_description: 'An unexpected error occurred during token exchange',
+      details: err.message
+    });
+  }
 });
+
+// Enhanced Token Generation Function
+function generateToken(payload, options = {}) {
+  const defaultOptions = {
+    expiresIn: '1h'
+  };
+
+  const mergedOptions = { ...defaultOptions, ...options };
+
+  try {
+    const token = jwt.sign(payload, JWT_SECRET, mergedOptions);
+    
+    // Optional: Log token generation (be careful not to log sensitive info)
+    console.log('Token Generated', {
+      payload: Object.keys(payload),
+      expiresIn: mergedOptions.expiresIn
+    });
+
+    return token;
+  } catch (error) {
+    console.error('Token Generation Error:', {
+      name: error.name,
+      message: error.message
+    });
+    throw error;
+  }
+}
 
 /**
  * UserInfo Endpoint (ตามมาตรฐาน OIDC)
@@ -467,6 +712,32 @@ app.get('/auth/userinfo', authenticateJWT, async (req, res) => {
   });
 });
 
+
+// Comprehensive logging middleware
+const oauthLoggingMiddleware = (req, res, next) => {
+  console.group('OAuth Request');
+  console.log('Path:', req.path);
+  console.log('Method:', req.method);
+  console.log('Full Headers:', JSON.stringify(req.headers, null, 2));
+  console.log('Query Parameters:', JSON.stringify(req.query, null, 2));
+  console.log('Body:', JSON.stringify(req.body, null, 2));
+  console.groupEnd();
+
+  // Capture and log the original send method
+  const originalSend = res.send;
+  res.send = function(body) {
+      console.group('OAuth Response');
+      console.log('Status:', res.statusCode);
+      console.log('Body:', body);
+      console.groupEnd();
+      originalSend.call(this, body);
+  };
+
+  next();
+};
+
+// Apply middleware to OAuth-related routes
+app.use(['/auth/authorize', '/auth/token'], oauthLoggingMiddleware);
 /* =======================
    Endpoint อื่นๆ (เช่น validate token, callback สำหรับ OIDC provider อื่น)
    ======================= */
@@ -484,10 +755,26 @@ app.post('/validate-token', (req, res) => {
 
 // Endpoint ตัวอย่างสำหรับการ handle callback (ถ้าใช้ในบริบทของ OIDC provider อื่น)
 app.get('/callback', async (req, res) => {
-  const { code } = req.query;
-  if (!code) {
-    return res.status(400).send('Authorization code is missing.');
+  const params = new URLSearchParams(location.search);
+  const code = params.get('code');
+  const error = params.get('error');
+
+  console.log('Callback URL params:', location.search); // Log the full URL
+  console.log('Received authorization code:', code); // Log the received code
+
+  if (error) {
+    console.error('Authorization error:', error);
+    navigate('/login');
+    return;
   }
+
+  if (!code) {
+    console.error('No authorization code received');
+    console.log('Full URL:', window.location.href); // Log the full URL for debugging
+    navigate('/login');
+    return;
+  }
+
   try {
     // ตัวอย่างการแลกเปลี่ยน code เป็น token (อาจจะใช้ axios ในการร้องขอ)
     // const tokenResponse = await axios.post(`${OIDC_PROVIDER}/auth/token`, {
@@ -702,13 +989,7 @@ app.post('/auth/login', async (req, res) => {
 });
 
 // Email configuration
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: process.env.EMAIL_USER || 'your-email@gmail.com',
-        pass: process.env.EMAIL_PASSWORD || 'your-app-specific-password'
-    }
-});
+
 
 // Client registration endpoint
 app.post('/auth/register-client', async (req, res) => {
@@ -791,3 +1072,28 @@ const registrationLimiter = rateLimit({
 });
 
 app.use('/auth/register-client', registrationLimiter);
+
+app.options('*', cors(corsOptions)); // Enable preflight for all routes
+
+
+
+app.get('/debug-callback', (req, res) => {
+    console.group('Callback Debug');
+    console.log('Full Query Parameters:', req.query);
+    console.log('Request Headers:', req.headers);
+    console.groupEnd();
+
+    res.json({
+        query: req.query,
+        headers: req.headers
+    });
+});
+
+// Auth Dashboard route
+app.get('/auth-dashboard', (req, res) => {
+  // Check if user is authenticated
+  if (!req.session.user) {
+    return res.redirect('/login');
+  }
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});

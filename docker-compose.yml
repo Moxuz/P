@@ -206,6 +206,7 @@ services:
     networks:
       - kong-network
 
+
 volumes:
   prometheus_data:
   grafana_data:
